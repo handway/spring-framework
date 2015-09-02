@@ -16,17 +16,16 @@
 
 package org.springframework.test.context.support;
 
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import org.springframework.core.annotation.AnnotationAttributes;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ActiveProfilesResolver;
+import org.springframework.test.util.MetaAnnotationUtils.AnnotationDescriptor;
 import org.springframework.util.Assert;
-import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 import static org.springframework.test.util.MetaAnnotationUtils.*;
@@ -60,7 +59,7 @@ public class DefaultActiveProfilesResolver implements ActiveProfilesResolver {
 	public String[] resolve(Class<?> testClass) {
 		Assert.notNull(testClass, "Class must not be null");
 
-		final Set<String> activeProfiles = new HashSet<String>();
+		final Set<String> activeProfiles = new LinkedHashSet<String>();
 
 		Class<ActiveProfiles> annotationType = ActiveProfiles.class;
 		AnnotationDescriptor<ActiveProfiles> descriptor = findAnnotationDescriptor(testClass, annotationType);
@@ -74,13 +73,14 @@ public class DefaultActiveProfilesResolver implements ActiveProfilesResolver {
 		}
 		else {
 			Class<?> declaringClass = descriptor.getDeclaringClass();
+			ActiveProfiles annotation = descriptor.synthesizeAnnotation();
 
-			AnnotationAttributes annAttrs = descriptor.getAnnotationAttributes();
 			if (logger.isTraceEnabled()) {
-				logger.trace(String.format("Retrieved @ActiveProfiles attributes [%s] for declaring class [%s].",
-					annAttrs, declaringClass.getName()));
+				logger.trace(String.format("Retrieved @ActiveProfiles [%s] for declaring class [%s].", annotation,
+					declaringClass.getName()));
 			}
 
+<<<<<<< HEAD
 			String[] profiles = annAttrs.getStringArray("profiles");
 			String[] valueProfiles = annAttrs.getStringArray("value");
 			boolean valueDeclared = !ObjectUtils.isEmpty(valueProfiles);
@@ -100,6 +100,9 @@ public class DefaultActiveProfilesResolver implements ActiveProfilesResolver {
 			}
 
 			for (String profile : profiles) {
+=======
+			for (String profile : annotation.profiles()) {
+>>>>>>> spring-projects/master
 				if (StringUtils.hasText(profile)) {
 					activeProfiles.add(profile.trim());
 				}

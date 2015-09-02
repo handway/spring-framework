@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ public class ContextConfigurationAttributes {
 	 * @param contextConfiguration the annotation from which to retrieve the attributes
 	 */
 	public ContextConfigurationAttributes(Class<?> declaringClass, ContextConfiguration contextConfiguration) {
-		this(declaringClass, resolveLocations(declaringClass, contextConfiguration), contextConfiguration.classes(),
+		this(declaringClass, contextConfiguration.locations(), contextConfiguration.classes(),
 				contextConfiguration.inheritLocations(), contextConfiguration.initializers(),
 				contextConfiguration.inheritInitializers(), contextConfiguration.name(), contextConfiguration.loader());
 	}
@@ -83,35 +83,9 @@ public class ContextConfigurationAttributes {
 	 */
 	@SuppressWarnings("unchecked")
 	public ContextConfigurationAttributes(Class<?> declaringClass, AnnotationAttributes annAttrs) {
-		this(declaringClass,
-				resolveLocations(declaringClass, annAttrs.getStringArray("locations"), annAttrs.getStringArray("value")),
-				annAttrs.getClassArray("classes"), annAttrs.getBoolean("inheritLocations"),
-				(Class<? extends ApplicationContextInitializer<? extends ConfigurableApplicationContext>>[]) annAttrs.getClassArray("initializers"),
-				annAttrs.getBoolean("inheritInitializers"), annAttrs.getString("name"),
-				(Class<? extends ContextLoader>) annAttrs.getClass("loader"));
-	}
-
-	/**
-	 * Construct a new {@link ContextConfigurationAttributes} instance for the
-	 * {@linkplain Class test class} that declared the
-	 * {@link ContextConfiguration @ContextConfiguration} annotation and its
-	 * corresponding attributes.
-	 * @param declaringClass the test class that declared {@code @ContextConfiguration}
-	 * @param locations the resource locations declared via {@code @ContextConfiguration}
-	 * @param classes the annotated classes declared via {@code @ContextConfiguration}
-	 * @param inheritLocations the {@code inheritLocations} flag declared via {@code @ContextConfiguration}
-	 * @param contextLoaderClass the {@code ContextLoader} class declared via {@code @ContextConfiguration}
-	 * @throws IllegalArgumentException if the {@code declaringClass} or {@code contextLoaderClass} is
-	 * {@code null}
-	 * @deprecated as of Spring 3.2, use
-	 * {@link #ContextConfigurationAttributes(Class, String[], Class[], boolean, Class[], boolean, String, Class)}
-	 * instead
-	 */
-	@Deprecated
-	public ContextConfigurationAttributes(Class<?> declaringClass, String[] locations, Class<?>[] classes,
-			boolean inheritLocations, Class<? extends ContextLoader> contextLoaderClass) {
-
-		this(declaringClass, locations, classes, inheritLocations, null, true, null, contextLoaderClass);
+		this(declaringClass, annAttrs.getStringArray("locations"), annAttrs.getClassArray("classes"), annAttrs.getBoolean("inheritLocations"),
+			(Class<? extends ApplicationContextInitializer<? extends ConfigurableApplicationContext>>[]) annAttrs.getClassArray("initializers"),
+			annAttrs.getBoolean("inheritInitializers"), annAttrs.getString("name"), (Class<? extends ContextLoader>) annAttrs.getClass("loader"));
 	}
 
 	/**
@@ -179,37 +153,6 @@ public class ContextConfigurationAttributes {
 		this.inheritInitializers = inheritInitializers;
 		this.name = (StringUtils.hasText(name) ? name : null);
 		this.contextLoaderClass = contextLoaderClass;
-	}
-
-
-	/**
-	 * Resolve resource locations from the {@link ContextConfiguration#locations() locations}
-	 * and {@link ContextConfiguration#value() value} attributes of the supplied
-	 * {@link ContextConfiguration} annotation.
-	 * @throws IllegalStateException if both the locations and value attributes have been declared
-	 */
-	private static String[] resolveLocations(Class<?> declaringClass, ContextConfiguration contextConfiguration) {
-		return resolveLocations(declaringClass, contextConfiguration.locations(), contextConfiguration.value());
-	}
-
-	/**
-	 * Resolve resource locations from the supplied {@code locations} and
-	 * {@code value} arrays, which correspond to attributes of the same names in
-	 * the {@link ContextConfiguration} annotation.
-	 * @throws IllegalStateException if both the locations and value attributes have been declared
-	 */
-	private static String[] resolveLocations(Class<?> declaringClass, String[] locations, String[] value) {
-		Assert.notNull(declaringClass, "declaringClass must not be null");
-		if (!ObjectUtils.isEmpty(value) && !ObjectUtils.isEmpty(locations)) {
-			throw new IllegalStateException(String.format("Test class [%s] has been configured with " +
-							"@ContextConfiguration's 'value' %s and 'locations' %s attributes. Only one declaration " +
-							"of resource locations is permitted per @ContextConfiguration annotation.",
-					declaringClass.getName(), ObjectUtils.nullSafeToString(value), ObjectUtils.nullSafeToString(locations)));
-		}
-		else if (!ObjectUtils.isEmpty(value)) {
-			locations = value;
-		}
-		return locations;
 	}
 
 

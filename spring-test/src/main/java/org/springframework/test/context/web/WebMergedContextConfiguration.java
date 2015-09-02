@@ -63,6 +63,7 @@ public class WebMergedContextConfiguration extends MergedContextConfiguration {
 	 * supplied parameters.
 	 * <p>Delegates to
 	 * {@link #WebMergedContextConfiguration(Class, String[], Class[], Set, String[], String[], String[], String, ContextLoader, CacheAwareContextLoaderDelegate, MergedContextConfiguration)}.
+<<<<<<< HEAD
 	 * @param testClass the test class for which the configuration was merged
 	 * @param locations the merged resource locations
 	 * @param classes the merged annotated classes
@@ -88,6 +89,8 @@ public class WebMergedContextConfiguration extends MergedContextConfiguration {
 	 * supplied parameters.
 	 * <p>Delegates to
 	 * {@link #WebMergedContextConfiguration(Class, String[], Class[], Set, String[], String[], String[], String, ContextLoader, CacheAwareContextLoaderDelegate, MergedContextConfiguration)}.
+=======
+>>>>>>> spring-projects/master
 	 * @param testClass the test class for which the configuration was merged
 	 * @param locations the merged resource locations
 	 * @param classes the merged annotated classes

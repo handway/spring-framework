@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,8 +145,7 @@ public class JdbcTemplate extends JdbcAccessor implements JdbcOperations {
 
 	/**
 	 * If this variable is set to true then execution of a CallableStatement will return
-	 * the results in a Map that uses case insensitive names for the parameters if
-	 * Commons Collections is available on the classpath.
+	 * the results in a Map that uses case insensitive names for the parameters.
 	 */
 	private boolean resultsMapCaseInsensitive = false;
 
@@ -498,20 +497,6 @@ public class JdbcTemplate extends JdbcAccessor implements JdbcOperations {
 	}
 
 	@Override
-	@Deprecated
-	public long queryForLong(String sql) throws DataAccessException {
-		Number number = queryForObject(sql, Long.class);
-		return (number != null ? number.longValue() : 0);
-	}
-
-	@Override
-	@Deprecated
-	public int queryForInt(String sql) throws DataAccessException {
-		Number number = queryForObject(sql, Integer.class);
-		return (number != null ? number.intValue() : 0);
-	}
-
-	@Override
 	public <T> List<T> queryForList(String sql, Class<T> elementType) throws DataAccessException {
 		return query(sql, getSingleColumnRowMapper(elementType));
 	}
@@ -837,34 +822,6 @@ public class JdbcTemplate extends JdbcAccessor implements JdbcOperations {
 	@Override
 	public Map<String, Object> queryForMap(String sql, Object... args) throws DataAccessException {
 		return queryForObject(sql, args, getColumnMapRowMapper());
-	}
-
-	@Override
-	@Deprecated
-	public long queryForLong(String sql, Object[] args, int[] argTypes) throws DataAccessException {
-		Number number = queryForObject(sql, args, argTypes, Long.class);
-		return (number != null ? number.longValue() : 0);
-	}
-
-	@Override
-	@Deprecated
-	public long queryForLong(String sql, Object... args) throws DataAccessException {
-		Number number = queryForObject(sql, args, Long.class);
-		return (number != null ? number.longValue() : 0);
-	}
-
-	@Override
-	@Deprecated
-	public int queryForInt(String sql, Object[] args, int[] argTypes) throws DataAccessException {
-		Number number = queryForObject(sql, args, argTypes, Integer.class);
-		return (number != null ? number.intValue() : 0);
-	}
-
-	@Override
-	@Deprecated
-	public int queryForInt(String sql, Object... args) throws DataAccessException {
-		Number number = queryForObject(sql, args, Integer.class);
-		return (number != null ? number.intValue() : 0);
 	}
 
 	@Override
@@ -1362,11 +1319,13 @@ public class JdbcTemplate extends JdbcAccessor implements JdbcOperations {
 	}
 
 	/**
-	 * Create a Map instance to be used as results map.
-	 * <p>If "isResultsMapCaseInsensitive" has been set to true,
-	 * a linked case-insensitive Map will be created.
+	 * Create a Map instance to be used as the results map.
+	 * <p>If {@link #resultsMapCaseInsensitive} has been set to true,
+	 * a {@link LinkedCaseInsensitiveMap} will be created; otherwise, a
+	 * {@link LinkedHashMap} will be created.
 	 * @return the results Map instance
 	 * @see #setResultsMapCaseInsensitive
+	 * @see #isResultsMapCaseInsensitive
 	 */
 	protected Map<String, Object> createResultsMap() {
 		if (isResultsMapCaseInsensitive()) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ import static org.mockito.BDDMockito.*;
  * @author Juergen Hoeller
  * @since 4.1.2
  */
+@SuppressWarnings({ "rawtypes", "unchecked" })
 public class PersistenceContextTransactionTests {
 
 	private EntityManagerFactory factory;
@@ -67,6 +68,7 @@ public class PersistenceContextTransactionTests {
 		given(manager.isOpen()).willReturn(true);
 
 		bean = new EntityManagerHoldingBean();
+		@SuppressWarnings("serial")
 		PersistenceAnnotationBeanPostProcessor pabpp = new PersistenceAnnotationBeanPostProcessor() {
 			@Override
 			protected EntityManagerFactory findEntityManagerFactory(String unitName, String requestingBeanName) {
@@ -114,12 +116,12 @@ public class PersistenceContextTransactionTests {
 		tt.execute(new TransactionCallback() {
 			@Override
 			public Object doInTransaction(TransactionStatus status) {
-				bean.sharedEntityManager.flush();
+				bean.sharedEntityManager.clear();
 				return null;
 			}
 		});
 
-		verify(manager).flush();
+		verify(manager).clear();
 		verify(manager).close();
 	}
 

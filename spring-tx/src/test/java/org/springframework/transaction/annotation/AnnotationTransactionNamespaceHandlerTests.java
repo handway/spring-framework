@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,10 +31,13 @@ import org.springframework.jmx.export.annotation.ManagedOperation;
 import org.springframework.jmx.export.annotation.ManagedResource;
 import org.springframework.stereotype.Service;
 import org.springframework.tests.transaction.CallCountingTransactionManager;
+import org.springframework.transaction.config.TransactionManagementConfigUtils;
+import org.springframework.transaction.event.TransactionalEventListenerFactory;
 
 /**
  * @author Rob Harrop
  * @author Juergen Hoeller
+ * @author Sam Brannen
  */
 public class AnnotationTransactionNamespaceHandlerTests extends TestCase {
 
@@ -99,6 +102,12 @@ public class AnnotationTransactionNamespaceHandlerTests extends TestCase {
 				server.invoke(ObjectName.getInstance("test:type=TestBean"), "doSomething", new Object[0], new String[0]));
 	}
 
+	public void testTransactionalEventListenerRegisteredProperly() {
+		assertTrue(this.context.containsBean(TransactionManagementConfigUtils
+				.TRANSACTIONAL_EVENT_LISTENER_FACTORY_BEAN_NAME));
+		assertEquals(1, this.context.getBeansOfType(TransactionalEventListenerFactory.class).size());
+	}
+
 	private TransactionalTestBean getTestBean() {
 		return (TransactionalTestBean) context.getBean("testBean");
 	}
@@ -119,6 +128,10 @@ public class AnnotationTransactionNamespaceHandlerTests extends TestCase {
 
 		@Transactional("qualifiedTransactionManager")
 		public void saveQualifiedFoo() {
+		}
+
+		@Transactional(transactionManager = "qualifiedTransactionManager")
+		public void saveQualifiedFooWithAttributeAlias() {
 		}
 
 		@Transactional

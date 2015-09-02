@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 package org.springframework.beans.factory.config;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.Reader;
 import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Collection;
@@ -35,6 +35,7 @@ import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
 import org.yaml.snakeyaml.nodes.MappingNode;
 import org.yaml.snakeyaml.parser.ParserException;
+import org.yaml.snakeyaml.reader.UnicodeReader;
 
 import org.springframework.core.io.Resource;
 import org.springframework.util.Assert;
@@ -130,9 +131,10 @@ public abstract class YamlProcessor {
 	 * Properties. Depending on the {@link #setResolutionMethod(ResolutionMethod)} not all
 	 * of the documents will be parsed.
 	 * @param callback a callback to delegate to once matching documents are found
+	 * @see #createYaml()
 	 */
 	protected void process(MatchCallback callback) {
-		Yaml yaml = new Yaml(new StrictMapAppenderConstructor());
+		Yaml yaml = createYaml();
 		for (Resource resource : this.resources) {
 			boolean found = process(callback, yaml, resource);
 			if (this.resolutionMethod == ResolutionMethod.FIRST_FOUND && found) {
@@ -141,15 +143,22 @@ public abstract class YamlProcessor {
 		}
 	}
 
+	/**
+	 * Create the {@link Yaml} instance to use.
+	 */
+	protected Yaml createYaml() {
+		return new Yaml(new StrictMapAppenderConstructor());
+	}
+
 	private boolean process(MatchCallback callback, Yaml yaml, Resource resource) {
 		int count = 0;
 		try {
 			if (this.logger.isDebugEnabled()) {
 				this.logger.debug("Loading from YAML: " + resource);
 			}
-			InputStream stream = resource.getInputStream();
+			Reader reader = new UnicodeReader(resource.getInputStream());
 			try {
-				for (Object object : yaml.loadAll(stream)) {
+				for (Object object : yaml.loadAll(reader)) {
 					if (object != null && process(asMap(object), callback)) {
 						count++;
 						if (this.resolutionMethod == ResolutionMethod.FIRST_FOUND) {
@@ -163,7 +172,7 @@ public abstract class YamlProcessor {
 				}
 			}
 			finally {
-				stream.close();
+				reader.close();
 			}
 		}
 		catch (IOException ex) {
@@ -331,7 +340,7 @@ public abstract class YamlProcessor {
 	/**
 	 * Status returned from {@link DocumentMatcher#matches(java.util.Properties)}
 	 */
-	public static enum MatchStatus {
+	public enum MatchStatus {
 
 		/**
 		 * A match was found.
@@ -360,7 +369,7 @@ public abstract class YamlProcessor {
 	/**
 	 * Method to use for resolving resources.
 	 */
-	public static enum ResolutionMethod {
+	public enum ResolutionMethod {
 
 		/**
 		 * Replace values from earlier in the list.
@@ -382,7 +391,7 @@ public abstract class YamlProcessor {
 	/**
 	 * A specialized {@link Constructor} that checks for duplicate keys.
 	 */
-	private static class StrictMapAppenderConstructor extends Constructor {
+	protected static class StrictMapAppenderConstructor extends Constructor {
 
 		public 	StrictMapAppenderConstructor() {
 			super();

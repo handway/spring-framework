@@ -22,6 +22,7 @@ import org.w3c.dom.Element;
 
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.ConstructorArgumentValues;
+import org.springframework.beans.factory.config.RuntimeBeanReference;
 import org.springframework.beans.factory.parsing.BeanComponentDefinition;
 import org.springframework.beans.factory.support.ManagedMap;
 import org.springframework.beans.factory.support.RootBeanDefinition;
@@ -126,6 +127,8 @@ class ViewControllerBeanDefinitionParser implements BeanDefinitionParser {
 		beanDef.getPropertyValues().add("order", "1");
 		beanDef.getPropertyValues().add("pathMatcher", MvcNamespaceUtils.registerPathMatcher(null, context, source));
 		beanDef.getPropertyValues().add("urlPathHelper", MvcNamespaceUtils.registerUrlPathHelper(null, context, source));
+		RuntimeBeanReference corsConfigurationsRef = MvcNamespaceUtils.registerCorsConfigurations(null, context, source);
+		beanDef.getPropertyValues().add("corsConfigurations", corsConfigurationsRef);
 
 		return beanDef;
 	}
@@ -140,6 +143,8 @@ class ViewControllerBeanDefinitionParser implements BeanDefinitionParser {
 		}
 		if (element.hasAttribute("context-relative")) {
 			redirectView.getPropertyValues().add("contextRelative", element.getAttribute("context-relative"));
+		} else {
+			redirectView.getPropertyValues().add("contextRelative", true);
 		}
 		if (element.hasAttribute("keep-query-params")) {
 			redirectView.getPropertyValues().add("propagateQueryParams", element.getAttribute("keep-query-params"));

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import java.net.URI;
 import org.apache.http.HttpEntityEnclosingRequest;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.Configurable;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -29,7 +30,11 @@ import org.junit.Test;
 import org.springframework.http.HttpMethod;
 
 import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
+/**
+ * @author Stephane Nicoll
+ */
 public class HttpComponentsClientHttpRequestFactoryTests extends AbstractHttpRequestFactoryTestCase {
 
 	@Override
@@ -40,6 +45,7 @@ public class HttpComponentsClientHttpRequestFactoryTests extends AbstractHttpReq
 	@Override
 	@Test
 	public void httpMethods() throws Exception {
+		super.httpMethods();
 		assertHttpMethod("patch", HttpMethod.PATCH);
 	}
 
@@ -80,42 +86,80 @@ public class HttpComponentsClientHttpRequestFactoryTests extends AbstractHttpReq
 	}
 
 	@Test
-	public void customHttpClientUsesItsDefault() throws Exception {
-		HttpComponentsClientHttpRequestFactory hrf =
-				new HttpComponentsClientHttpRequestFactory(HttpClientBuilder.create().build());
+	public void defaultSettingsOfHttpClientMergedOnExecutorCustomization() throws Exception {
+		RequestConfig defaultConfig = RequestConfig.custom().setConnectTimeout(1234).build();
+		CloseableHttpClient client = mock(CloseableHttpClient.class,
+				withSettings().extraInterfaces(Configurable.class));
+		Configurable configurable = (Configurable) client;
+		when(configurable.getConfig()).thenReturn(defaultConfig);
 
-		URI uri = new URI(baseUrl + "/status/ok");
-		HttpComponentsClientHttpRequest request = (HttpComponentsClientHttpRequest)
-				hrf.createRequest(uri, HttpMethod.GET);
+		HttpComponentsClientHttpRequestFactory hrf = new HttpComponentsClientHttpRequestFactory(client);
+		assertSame("Default client configuration is expected", defaultConfig, retrieveRequestConfig(hrf));
 
-		assertNull("No custom config should be set with a custom HttpClient",
-				request.getHttpContext().getAttribute(HttpClientContext.REQUEST_CONFIG));
+		hrf.setConnectionRequestTimeout(4567);
+		RequestConfig requestConfig = retrieveRequestConfig(hrf);
+		assertNotNull(requestConfig);
+		assertEquals(4567, requestConfig.getConnectionRequestTimeout());
+		// Default connection timeout merged
+		assertEquals(1234, requestConfig.getConnectTimeout());
 	}
 
 	@Test
-	public void defaultSettingsOfHttpClientLostOnExecutorCustomization() throws Exception {
-		CloseableHttpClient client = HttpClientBuilder.create()
-				.setDefaultRequestConfig(RequestConfig.custom().setConnectTimeout(1234).build())
-				.build();
-		HttpComponentsClientHttpRequestFactory hrf = new HttpComponentsClientHttpRequestFactory(client);
+	public void localSettingsOverrideClientDefaultSettings() throws Exception {
+		RequestConfig defaultConfig = RequestConfig.custom()
+				.setConnectTimeout(1234).setConnectionRequestTimeout(6789).build();
+		CloseableHttpClient client = mock(CloseableHttpClient.class,
+				withSettings().extraInterfaces(Configurable.class));
+		Configurable configurable = (Configurable) client;
+		when(configurable.getConfig()).thenReturn(defaultConfig);
 
+		HttpComponentsClientHttpRequestFactory hrf = new HttpComponentsClientHttpRequestFactory(client);
+		hrf.setConnectTimeout(5000);
+
+		RequestConfig requestConfig = retrieveRequestConfig(hrf);
+		assertEquals(5000, requestConfig.getConnectTimeout());
+		assertEquals(6789, requestConfig.getConnectionRequestTimeout());
+		assertEquals(-1, requestConfig.getSocketTimeout());
+	}
+
+	@Test
+	public void mergeBasedOnCurrentHttpClient() throws Exception {
+		RequestConfig defaultConfig = RequestConfig.custom()
+				.setSocketTimeout(1234).build();
+		final CloseableHttpClient client = mock(CloseableHttpClient.class,
+				withSettings().extraInterfaces(Configurable.class));
+		Configurable configurable = (Configurable) client;
+		when(configurable.getConfig()).thenReturn(defaultConfig);
+
+		HttpComponentsClientHttpRequestFactory hrf = new HttpComponentsClientHttpRequestFactory() {
+			@Override
+			public HttpClient getHttpClient() {
+				return client;
+			}
+		};
+		hrf.setReadTimeout(5000);
+
+		RequestConfig requestConfig = retrieveRequestConfig(hrf);
+		assertEquals(-1, requestConfig.getConnectTimeout());
+		assertEquals(-1, requestConfig.getConnectionRequestTimeout());
+		assertEquals(5000, requestConfig.getSocketTimeout());
+
+		// Update the Http client so that it returns an updated  config
+		RequestConfig updatedDefaultConfig = RequestConfig.custom()
+				.setConnectTimeout(1234).build();
+		when(configurable.getConfig()).thenReturn(updatedDefaultConfig);
+		hrf.setReadTimeout(7000);
+		RequestConfig requestConfig2 = retrieveRequestConfig(hrf);
+		assertEquals(1234, requestConfig2.getConnectTimeout());
+		assertEquals(-1, requestConfig2.getConnectionRequestTimeout());
+		assertEquals(7000, requestConfig2.getSocketTimeout());
+	}
+
+	private RequestConfig retrieveRequestConfig(HttpComponentsClientHttpRequestFactory factory) throws Exception {
 		URI uri = new URI(baseUrl + "/status/ok");
 		HttpComponentsClientHttpRequest request = (HttpComponentsClientHttpRequest)
-				hrf.createRequest(uri, HttpMethod.GET);
-
-		assertNull("No custom config should be set with a custom HttpClient",
-				request.getHttpContext().getAttribute(HttpClientContext.REQUEST_CONFIG));
-
-		hrf.setConnectionRequestTimeout(4567);
-		HttpComponentsClientHttpRequest request2 = (HttpComponentsClientHttpRequest)
-				hrf.createRequest(uri, HttpMethod.GET);
-		Object requestConfigAttribute = request2.getHttpContext().getAttribute(HttpClientContext.REQUEST_CONFIG);
-		assertNotNull(requestConfigAttribute);
-		RequestConfig requestConfig = (RequestConfig) requestConfigAttribute;
-
-		assertEquals(4567, requestConfig.getConnectionRequestTimeout());
-		// No way to access the request config of the HTTP client so no way to "merge" our customizations
-		assertEquals(-1, requestConfig.getConnectTimeout());
+				factory.createRequest(uri, HttpMethod.GET);
+		return (RequestConfig) request.getHttpContext().getAttribute(HttpClientContext.REQUEST_CONFIG);
 	}
 
 	@Test

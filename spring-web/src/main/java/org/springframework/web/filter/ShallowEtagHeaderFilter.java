@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,12 @@
 package org.springframework.web.filter;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.ServletRequest;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
@@ -26,7 +30,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.DigestUtils;
-import org.springframework.util.StreamUtils;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 import org.springframework.web.util.WebUtils;
 
@@ -55,10 +58,11 @@ public class ShallowEtagHeaderFilter extends OncePerRequestFilter {
 
 	private static final String DIRECTIVE_NO_STORE = "no-store";
 
-
 	/** Checking for Servlet 3.0+ HttpServletResponse.getHeader(String) */
 	private static final boolean responseGetHeaderAvailable =
 			ClassUtils.hasMethod(HttpServletResponse.class, "getHeader", String.class);
+
+	private static final String STREAMING_ATTRIBUTE = ShallowEtagHeaderFilter.class.getName() + ".STREAMING";
 
 
 	/**
@@ -76,12 +80,12 @@ public class ShallowEtagHeaderFilter extends OncePerRequestFilter {
 
 		HttpServletResponse responseToUse = response;
 		if (!isAsyncDispatch(request) && !(response instanceof ContentCachingResponseWrapper)) {
-			responseToUse = new ContentCachingResponseWrapper(response);
+			responseToUse = new HttpStreamingAwareContentCachingResponseWrapper(response, request);
 		}
 
 		filterChain.doFilter(request, responseToUse);
 
-		if (!isAsyncStarted(request)) {
+		if (!isAsyncStarted(request) && !isContentCachingDisabled(request)) {
 			updateResponse(request, responseToUse);
 		}
 	}
@@ -89,19 +93,15 @@ public class ShallowEtagHeaderFilter extends OncePerRequestFilter {
 	private void updateResponse(HttpServletRequest request, HttpServletResponse response) throws IOException {
 		ContentCachingResponseWrapper responseWrapper =
 				WebUtils.getNativeResponse(response, ContentCachingResponseWrapper.class);
-		Assert.notNull(responseWrapper, "ShallowEtagResponseWrapper not found");
-
+		Assert.notNull(responseWrapper, "ContentCachingResponseWrapper not found");
 		HttpServletResponse rawResponse = (HttpServletResponse) responseWrapper.getResponse();
 		int statusCode = responseWrapper.getStatusCode();
-		byte[] body = responseWrapper.getContentAsByteArray();
 
 		if (rawResponse.isCommitted()) {
-			if (body.length > 0) {
-				StreamUtils.copy(body, rawResponse.getOutputStream());
-			}
+			responseWrapper.copyBodyToResponse();
 		}
-		else if (isEligibleForEtag(request, responseWrapper, statusCode, body)) {
-			String responseETag = generateETagHeaderValue(body);
+		else if (isEligibleForEtag(request, responseWrapper, statusCode, responseWrapper.getContentInputStream())) {
+			String responseETag = generateETagHeaderValue(responseWrapper.getContentInputStream());
 			rawResponse.setHeader(HEADER_ETAG, responseETag);
 			String requestETag = request.getHeader(HEADER_IF_NONE_MATCH);
 			if (responseETag.equals(requestETag)) {
@@ -115,20 +115,14 @@ public class ShallowEtagHeaderFilter extends OncePerRequestFilter {
 					logger.trace("ETag [" + responseETag + "] not equal to If-None-Match [" + requestETag +
 							"], sending normal response");
 				}
-				if (body.length > 0) {
-					rawResponse.setContentLength(body.length);
-					StreamUtils.copy(body, rawResponse.getOutputStream());
-				}
+				responseWrapper.copyBodyToResponse();
 			}
 		}
 		else {
 			if (logger.isTraceEnabled()) {
 				logger.trace("Response with status code [" + statusCode + "] not eligible for ETag");
 			}
-			if (body.length > 0) {
-				rawResponse.setContentLength(body.length);
-				StreamUtils.copy(body, rawResponse.getOutputStream());
-			}
+			responseWrapper.copyBodyToResponse();
 		}
 	}
 
@@ -143,14 +137,13 @@ public class ShallowEtagHeaderFilter extends OncePerRequestFilter {
 	 * @param request the HTTP request
 	 * @param response the HTTP response
 	 * @param responseStatusCode the HTTP response status code
-	 * @param responseBody the response body
+	 * @param inputStream the response body
 	 * @return {@code true} if eligible for ETag generation; {@code false} otherwise
 	 */
 	protected boolean isEligibleForEtag(HttpServletRequest request, HttpServletResponse response,
-			int responseStatusCode, byte[] responseBody) {
+			int responseStatusCode, InputStream inputStream) {
 
-		if (responseStatusCode >= 200 && responseStatusCode < 300 &&
-				HttpMethod.GET.name().equals(request.getMethod())) {
+		if (responseStatusCode >= 200 && responseStatusCode < 300 && HttpMethod.GET.name().equals(request.getMethod())) {
 			String cacheControl = (responseGetHeaderAvailable ? response.getHeader(HEADER_CACHE_CONTROL) : null);
 			if (cacheControl == null || !cacheControl.contains(DIRECTIVE_NO_STORE)) {
 				return true;
@@ -162,15 +155,62 @@ public class ShallowEtagHeaderFilter extends OncePerRequestFilter {
 	/**
 	 * Generate the ETag header value from the given response body byte array.
 	 * <p>The default implementation generates an MD5 hash.
-	 * @param bytes the response body as byte array
+	 * @param inputStream the response body as an InputStream
 	 * @return the ETag header value
 	 * @see org.springframework.util.DigestUtils
 	 */
-	protected String generateETagHeaderValue(byte[] bytes) {
+	protected String generateETagHeaderValue(InputStream inputStream) {
 		StringBuilder builder = new StringBuilder("\"0");
-		DigestUtils.appendMd5DigestAsHex(bytes, builder);
+		try {
+			DigestUtils.appendMd5DigestAsHex(inputStream, builder);
+		}
+		catch (IOException e) {
+			throw new RuntimeException(e);
+		}
 		builder.append('"');
 		return builder.toString();
+	}
+
+
+	/**
+	 * This method can be used to disable the content caching response wrapper
+	 * of the ShallowEtagHeaderFilter. This can be done before the start of HTTP
+	 * streaming for example where the response will be written to asynchronously
+	 * and not in the context of a Servlet container thread.
+	 * @since 4.2
+	 */
+	public static void disableContentCaching(ServletRequest request) {
+		Assert.notNull(request);
+		request.setAttribute(STREAMING_ATTRIBUTE, true);
+	}
+
+	private static boolean isContentCachingDisabled(HttpServletRequest request) {
+		return (request.getAttribute(STREAMING_ATTRIBUTE) != null);
+	}
+
+
+	private static class HttpStreamingAwareContentCachingResponseWrapper extends ContentCachingResponseWrapper {
+
+		private final HttpServletRequest request;
+
+		public HttpStreamingAwareContentCachingResponseWrapper(HttpServletResponse response, HttpServletRequest request) {
+			super(response);
+			this.request = request;
+		}
+
+		@Override
+		public ServletOutputStream getOutputStream() throws IOException {
+			return (useRawResponse() ? getResponse().getOutputStream() : super.getOutputStream());
+		}
+
+		@Override
+		public PrintWriter getWriter() throws IOException {
+			return (useRawResponse() ? getResponse().getWriter() : super.getWriter());
+		}
+
+		private boolean useRawResponse() {
+			return isContentCachingDisabled(this.request);
+		}
 	}
 
 }

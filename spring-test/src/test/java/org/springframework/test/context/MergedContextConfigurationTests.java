@@ -1,5 +1,9 @@
 /*
+<<<<<<< HEAD
  * Copyright 2002-2014 the original author or authors.
+=======
+ * Copyright 2002-2015 the original author or authors.
+>>>>>>> spring-projects/master
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +37,8 @@ import static org.junit.Assert.*;
  * Unit tests for {@link MergedContextConfiguration}.
  *
  * <p>These tests primarily exist to ensure that {@code MergedContextConfiguration}
- * can safely be used as the cache key for {@link ContextCache}.
+ * can safely be used as the cache key for
+ * {@link org.springframework.test.context.cache.ContextCache ContextCache}.
  *
  * @author Sam Brannen
  * @since 3.1
@@ -140,7 +145,11 @@ public class MergedContextConfigurationTests {
 				EMPTY_STRING_ARRAY, EMPTY_CLASS_ARRAY, activeProfiles1, loader);
 		MergedContextConfiguration mergedConfig2 = new MergedContextConfiguration(getClass(),
 				EMPTY_STRING_ARRAY, EMPTY_CLASS_ARRAY, activeProfiles2, loader);
+<<<<<<< HEAD
 		assertEquals(mergedConfig1.hashCode(), mergedConfig2.hashCode());
+=======
+		assertNotEquals(mergedConfig1.hashCode(), mergedConfig2.hashCode());
+>>>>>>> spring-projects/master
 	}
 
 	@Test
@@ -336,7 +345,11 @@ public class MergedContextConfigurationTests {
 				EMPTY_STRING_ARRAY, EMPTY_CLASS_ARRAY, activeProfiles1, loader);
 		MergedContextConfiguration mergedConfig2 = new MergedContextConfiguration(getClass(),
 				EMPTY_STRING_ARRAY, EMPTY_CLASS_ARRAY, activeProfiles2, loader);
+<<<<<<< HEAD
 		assertEquals(mergedConfig1, mergedConfig2);
+=======
+		assertNotEquals(mergedConfig1, mergedConfig2);
+>>>>>>> spring-projects/master
 	}
 
 	@Test

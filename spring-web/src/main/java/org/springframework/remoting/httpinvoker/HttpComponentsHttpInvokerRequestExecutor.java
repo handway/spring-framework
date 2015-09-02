@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import org.apache.http.NoHttpResponseException;
 import org.apache.http.StatusLine;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.Configurable;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
@@ -72,6 +73,7 @@ public class HttpComponentsHttpInvokerRequestExecutor extends AbstractHttpInvoke
 
 	private RequestConfig requestConfig;
 
+
 	/**
 	 * Create a new instance of the HttpComponentsHttpInvokerRequestExecutor with a default
 	 * {@link HttpClient} that uses a default {@code org.apache.http.impl.conn.PoolingClientConnectionManager}.
@@ -79,20 +81,6 @@ public class HttpComponentsHttpInvokerRequestExecutor extends AbstractHttpInvoke
 	public HttpComponentsHttpInvokerRequestExecutor() {
 		this(createDefaultHttpClient(), RequestConfig.custom()
 				.setSocketTimeout(DEFAULT_READ_TIMEOUT_MILLISECONDS).build());
-	}
-
-	private static HttpClient createDefaultHttpClient() {
-		Registry<ConnectionSocketFactory> schemeRegistry = RegistryBuilder.<ConnectionSocketFactory>create()
-			.register("http", PlainConnectionSocketFactory.getSocketFactory())
-			.register("https", SSLConnectionSocketFactory.getSocketFactory())
-			.build();
-
-		PoolingHttpClientConnectionManager connectionManager
-				= new PoolingHttpClientConnectionManager(schemeRegistry);
-		connectionManager.setMaxTotal(DEFAULT_MAX_TOTAL_CONNECTIONS);
-		connectionManager.setDefaultMaxPerRoute(DEFAULT_MAX_CONNECTIONS_PER_ROUTE);
-
-		return HttpClientBuilder.create().setConnectionManager(connectionManager).build();
 	}
 
 	/**
@@ -108,6 +96,21 @@ public class HttpComponentsHttpInvokerRequestExecutor extends AbstractHttpInvoke
 		this.httpClient = httpClient;
 		this.requestConfig = requestConfig;
 	}
+
+
+	private static HttpClient createDefaultHttpClient() {
+		Registry<ConnectionSocketFactory> schemeRegistry = RegistryBuilder.<ConnectionSocketFactory>create()
+				.register("http", PlainConnectionSocketFactory.getSocketFactory())
+				.register("https", SSLConnectionSocketFactory.getSocketFactory())
+				.build();
+
+		PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager(schemeRegistry);
+		connectionManager.setMaxTotal(DEFAULT_MAX_TOTAL_CONNECTIONS);
+		connectionManager.setDefaultMaxPerRoute(DEFAULT_MAX_CONNECTIONS_PER_ROUTE);
+
+		return HttpClientBuilder.create().setConnectionManager(connectionManager).build();
+	}
+
 
 	/**
 	 * Set the {@link HttpClient} instance to use for this request executor.
@@ -133,8 +136,7 @@ public class HttpComponentsHttpInvokerRequestExecutor extends AbstractHttpInvoke
 	 */
 	public void setConnectTimeout(int timeout) {
 		Assert.isTrue(timeout >= 0, "Timeout must be a non-negative value");
-		this.requestConfig = cloneRequestConfig()
-				.setConnectTimeout(timeout).build();
+		this.requestConfig = cloneRequestConfig().setConnectTimeout(timeout).build();
 		setLegacyConnectionTimeout(getHttpClient(), timeout);
 	}
 
@@ -155,8 +157,7 @@ public class HttpComponentsHttpInvokerRequestExecutor extends AbstractHttpInvoke
 	@SuppressWarnings("deprecation")
 	private void setLegacyConnectionTimeout(HttpClient client, int timeout) {
 		if (org.apache.http.impl.client.AbstractHttpClient.class.isInstance(client)) {
-			client.getParams().setIntParameter(
-					org.apache.http.params.CoreConnectionPNames.CONNECTION_TIMEOUT, timeout);
+			client.getParams().setIntParameter(org.apache.http.params.CoreConnectionPNames.CONNECTION_TIMEOUT, timeout);
 		}
 	}
 
@@ -170,8 +171,7 @@ public class HttpComponentsHttpInvokerRequestExecutor extends AbstractHttpInvoke
 	 * @see RequestConfig#getConnectionRequestTimeout()
 	 */
 	public void setConnectionRequestTimeout(int connectionRequestTimeout) {
-		this.requestConfig = cloneRequestConfig()
-				.setConnectionRequestTimeout(connectionRequestTimeout).build();
+		this.requestConfig = cloneRequestConfig().setConnectionRequestTimeout(connectionRequestTimeout).build();
 	}
 
 	/**
@@ -185,8 +185,7 @@ public class HttpComponentsHttpInvokerRequestExecutor extends AbstractHttpInvoke
 	 */
 	public void setReadTimeout(int timeout) {
 		Assert.isTrue(timeout >= 0, "Timeout must be a non-negative value");
-		this.requestConfig = cloneRequestConfig()
-				.setSocketTimeout(timeout).build();
+		this.requestConfig = cloneRequestConfig().setSocketTimeout(timeout).build();
 		setLegacySocketTimeout(getHttpClient(), timeout);
 	}
 
@@ -200,14 +199,14 @@ public class HttpComponentsHttpInvokerRequestExecutor extends AbstractHttpInvoke
 	@SuppressWarnings("deprecation")
 	private void setLegacySocketTimeout(HttpClient client, int timeout) {
 		if (org.apache.http.impl.client.AbstractHttpClient.class.isInstance(client)) {
-			client.getParams().setIntParameter(
-					org.apache.http.params.CoreConnectionPNames.SO_TIMEOUT, timeout);
+			client.getParams().setIntParameter(org.apache.http.params.CoreConnectionPNames.SO_TIMEOUT, timeout);
 		}
 	}
 
 	private RequestConfig.Builder cloneRequestConfig() {
-		return this.requestConfig != null ? RequestConfig.copy(this.requestConfig) : RequestConfig.custom();
+		return (this.requestConfig != null ? RequestConfig.copy(this.requestConfig) : RequestConfig.custom());
 	}
+
 
 	/**
 	 * Execute the given request through the HttpClient.
@@ -269,12 +268,39 @@ public class HttpComponentsHttpInvokerRequestExecutor extends AbstractHttpInvoke
 	 * Create a {@link RequestConfig} for the given configuration. Can return {@code null}
 	 * to indicate that no custom request config should be set and the defaults of the
 	 * {@link HttpClient} should be used.
+	 * <p>The default implementation tries to merge the defaults of the client with the
+	 * local customizations of the instance, if any.
 	 * @param config the HTTP invoker configuration that specifies the
 	 * target service
 	 * @return the RequestConfig to use
 	 */
 	protected RequestConfig createRequestConfig(HttpInvokerClientConfiguration config) {
-		return (this.requestConfig != null ? this.requestConfig : null);
+		HttpClient client = getHttpClient();
+		if (client instanceof Configurable) {
+			RequestConfig clientRequestConfig = ((Configurable) client).getConfig();
+			return mergeRequestConfig(clientRequestConfig);
+		}
+		return this.requestConfig;
+	}
+
+	private RequestConfig mergeRequestConfig(RequestConfig defaultRequestConfig) {
+		if (this.requestConfig == null) { // nothing to merge
+			return defaultRequestConfig;
+		}
+		RequestConfig.Builder builder = RequestConfig.copy(defaultRequestConfig);
+		int connectTimeout = this.requestConfig.getConnectTimeout();
+		if (connectTimeout >= 0) {
+			builder.setConnectTimeout(connectTimeout);
+		}
+		int connectionRequestTimeout = this.requestConfig.getConnectionRequestTimeout();
+		if (connectionRequestTimeout >= 0) {
+			builder.setConnectionRequestTimeout(connectionRequestTimeout);
+		}
+		int socketTimeout = this.requestConfig.getSocketTimeout();
+		if (socketTimeout >= 0) {
+			builder.setSocketTimeout(socketTimeout);
+		}
+		return builder.build();
 	}
 
 	/**

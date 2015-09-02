@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,4 +108,28 @@ public class PathResourceResolverTests {
 		assertTrue(this.resolver.checkResource(resource, servletContextLocation));
 	}
 
+	// SPR-12624
+	@Test
+	public void checkRelativeLocation() throws Exception {
+		String locationUrl= new UrlResource(getClass().getResource("./test/")).getURL().toExternalForm();
+		Resource location = new UrlResource(locationUrl.replace("/springframework","/../org/springframework"));
+
+		assertNotNull(this.resolver.resolveResource(null, "main.css", Arrays.asList(location), null));
+	}
+
+	// SPR-12747
+	@Test
+	public void checkFileLocation() throws Exception {
+		Resource resource = new ClassPathResource("test/main.css", PathResourceResolver.class);
+		assertTrue(this.resolver.checkResource(resource, resource));
+	}
+
+	// SPR-13241
+	@Test
+	public void resolvePathRootResource() throws Exception {
+		Resource webjarsLocation = new ClassPathResource("/META-INF/resources/webjars/", PathResourceResolver.class);
+		String path = this.resolver.resolveUrlPathInternal("", Arrays.asList(webjarsLocation), null);
+
+		assertNull(path);
+	}
 }
